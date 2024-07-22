@@ -1,0 +1,350 @@
+{tri.bra
+𝕌𝕋𝔽-𝟠
+
+Collect trigrams from lemmas
+
+Usage
+-----
+* Edit the line specifying the input (input=yourinput). Remember to escape backslashes. You can use forward slashes instead.
+* Start Bracmat
+* after the prompt, type get$"tri.bra"
+* Output is named <your input's name>".trigramFrequenciesSorted"
+* CSTlemma can use the output to disambiguate between lemma candidates (-T option). This does not always give better results overall. It works well for Middle Low German. 
+
+Input
+-----
+First column: full forms (not used)
+Second column: lemmas
+(Optionally more columns, which will not be used)
+
+Empty lines are allowed
+
+Example:
+
+bekluendern	beklundern
+beklundern	beklundern
+
+behalp	behelpen
+behelffen	behelpen
+behelpe	behelpen
+
+beholtnisse	beholtnisse
+beholtnysse	beholtnisse
+
+behodersche	behodersche
+}
+
+X=
+  "The first declaration of input is what counts."
+  (input="toklemSort.tab.ph")
+  (input="C:\\projects\\affixtrain\\dagammel\\flexliste_ods.csv.ph")
+  ( doit
+  =   
+    .   ( sort
+        =   L M a b
+          .   !arg:?L
+            &   whl
+              ' ( !L:% %
+                & :?M
+                &   whl
+                  ' ( !L:%?a %?b ?L
+                    & !a+!b !M:?M
+                    )
+                & !L !M:?L
+                )
+            & mop$((=.!arg).!L.(=+))
+        )
+      &     vap
+          $ ( ( 
+              =   
+                .     @(!arg:?tok \t ?lem)
+                    & (   @(!lem:?L \t ?)
+                        & !L:?lem
+                      |   @(!lem:?L \r)
+                        & !L:?lem
+                      | 
+                      )
+                    & (!tok:!lem|)
+                  | 
+              )
+            . get$(!arg,STR)
+            . \n
+            )
+        : ?lemmas
+      & lst$(lemmas,Alemmas,NEW,WYD,BIN)
+      & ( tri
+        =   
+          .   :?trs
+            & (   " " vap$((=.!arg).!arg) " "
+                :   ?
+                    ( %@ %@ %@:?TRI
+                    & str$!TRI !trs:?trs
+                    )
+                    (?&~)
+              | !trs
+              )
+        )
+      & map$(tri.!lemmas):?tris
+      & lst$(tris,Atris,NEW,WYD,BIN)
+      &     str
+          $ ( map
+            $ ( ( 
+                =   
+                  .   !arg:(?w.?n)
+                    & !w \t !n \n
+                )
+              .   sort
+                $ ( map
+                  $ ( ( 
+                      =   
+                        . !arg:#?n*%@?w&(!w.!n)
+                      )
+                    . sort$!tris
+                    )
+                  )
+              )
+            )
+        : ?trigramFrequenciesSorted
+      &   put
+        $ ( !trigramFrequenciesSorted
+          , str$(!(its.input) ".trigramFrequenciesSorted")
+          , NEW
+          , BIN
+          )
+      &     sort
+          $ ( map
+            $ ( ( 
+                = .!arg:#?n*%@?w&(!n.!w)
+                )
+              . sort$!tris
+              )
+            )
+        : ?trigramFrequencies
+      &   lst
+        $ (trigramFrequencies,trigramFrequencies,NEW,WYD,BIN)
+      &   put
+        $ (   str
+            $ ( map
+              $ ( ( 
+                  =   
+                    .   !arg:(?F.?T)
+                      & !T \t !F \n
+                  )
+                . !trigramFrequencies
+                )
+              )
+          , str$(!(its.input) ".trigramFrequencies.tab")
+          , NEW
+          , BIN
+          )
+      & " trigramFrequencies: (freq.trigram) 
+          freq:    # occurrences of trigram in lemma types in all of corpus.
+                   So each lemma type is surveyed only once.
+          trigram: Sequence of three UTF-8 characters. First trigram of lemma includes
+                   a space preceding the lemma. The last trigram includes a space
+                   following the lemma.
+          Excerpt from trigramFrequencies:
+
+          (16.\" Pr\")
+          (16.\" fe\")
+          (16.\" fi\")
+          (16.\" fu\")
+          (16.\" of\")
+          (16.Bon)
+          (16.Eng)
+          (16.Gar)
+          (16.Hey)
+          (16.Rey)
+          (16.Sar)
+          (16.Str)
+          (16.ado)
+          (16.afg)
+          (16.aha)
+          (16.arq)
+          (16.\"ay \")
+          (16.ayn)
+"
+      & new$hash:?Tha
+      &   map
+        $ ( ( 
+            =   
+              .   !arg:(?n.?t)
+                & (Tha..insert)$(!t.!n)
+            )
+          . !trigramFrequencies
+          )
+      &     new
+          $ ( UFP
+            ,   
+              ' ( (s.p) (s.len)
+                . divide$(log$!p,log$!len)*10000:?P
+                )
+            )
+        : ?weightedProb
+      & ( Weight
+        =   p x len
+          .   1:?p
+            &   map
+              $ ( ( 
+                  =   
+                    .   ( (Tha..find)$!arg:(?.?x)
+                        | 0:?x
+                        )
+                      & !x*!p:?p
+                  )
+                . tri$!arg:? [?len
+                )
+            & "Better is !p^((log$!len)^-1) or log$!p*(log$!len)^-1"
+            & (weightedProb..calculate)$(!p,!len)
+            & (weightedProb..export)$(N,P):?P
+            & (!len.!p.!arg)
+        )
+      & map$(Weight.!lemmas):?valued
+      & lst$(valued,valued,NEW,BIN,WYD)
+      & sort$!valued:?valuedsrt
+      & lst$(valuedsrt,valuedsrt,NEW,BIN,WYD)
+      & :?weights
+      & !valuedsrt:(?prv.?W.?) ?valuedsrt
+      & !W:?sum
+      & 1:?pro
+      &   whl
+        ' ( !valuedsrt:(?L.?W.?w) ?valuedsrt
+          & ( !prv:!L&!W !sum:?sum
+            |   !sum:? [?NN
+              & div$(!NN,2):?MM
+              & !sum:? [!MM %@?we ?
+              & out$(!prv div$(!we.!pro))
+              & !we:?pro
+              & (!prv.!we) !weights:?weights
+              & !L:?prv
+              & !W:?sum
+            )
+          )
+      & !sum:? [?NN
+      & div$(!NN,2):?MM
+      & !sum:? [!MM %?we ?
+      & out$(div$(!we.!pro))
+      & (!prv.!we) !weights:?weights
+      & "
+weights: First column is the length of a lemma, not counting preceding and trailing spaces.
+         Second column is the median of all products of all trigram frequencies of all lemmas with the length in the first column.
+         A lemma is prefixed and postfixed with white space characters before computing the product of its trigrams.
+The idea is that an unknown lemma has a fifty-fifty chance of having a higher value of the product of all its trigrams than the lemma that is in the middle of the sorted list of all lemmas with the same length.
+Example
+-------
+These are the lists of all lemmas with 19 or 20 characters that are found in the corpus. For each lemma the product of the frequencies of the trigrams are in the middle column.
+The rows are sorted. The medians are the frequencies for 'borgermessterszchen' (position 2 out of 4, rounding down) and 'achteundetwintigeste'.
+Shorter lemma lengths are much more frequent and the median value is much closer to neighbouring values.
+
+Input for computing weights:
+
+  (19.52542451667883479662522411980901632000000.Nuchterndantzessche)
+  (19.1487957110758891484571058530928384376512000.borgermessterszchen)
+  (19.1472812739740914286058054210496699039744000000.schlantanterlantant)
+  (19.32829108139444624057908656123547838936320000000.mannichvoldichliken)
+  (20.30961471807240324922966821824312115200000.hannepspinnerambacht)
+  (20.171097420672132576940263987416693429491466240.achteundetwintigeste)
+  (20.15872442651235660217416112340615363116804352000000.beckenwerchtenstrate)
+
+weights, based on the data above:
+
+  (20.171097420672132576940263987416693429491466240)
+  (19.1487957110758891484571058530928384376512000)
+"
+      & lst$(weights,weights,NEW,BIN,WYD)
+      &   put
+        $ (   str
+            $ ( :?Lst
+              &   whl
+                ' ( !weights:(?L.?W) ?weights
+                  & flt$(!W,5) \n !Lst:?Lst
+                  )
+              & !Lst
+              )
+          , str$(!(its.input) ".weights.tab")
+          , NEW
+          , BIN
+          )
+      &   whl
+        ' ( out$woord?
+          & get':?wrd
+          & !wrd:~
+          & out$(tri$!wrd)
+          &     sort
+              $ ( map
+                $ ( ( 
+                    =   
+                      .   Weight$!arg:(?ln.?p.?)
+                        & !weights:? (!ln.?W) ?
+                        & (!p*!W^-1.!arg)
+                    )
+                  . !wrd
+                  )
+                )
+            : ?bestlast
+          &   map
+            $ ( ( 
+                =   
+                  .   !arg:(?V.?L)
+                    & out$(flt$(!V,3) !L)
+                )
+              . !bestlast
+              )
+          )
+      & out$KLAAR
+  )
+  (new=.~|(its.doit)$!(its.input));
+
+r=
+  get'("tri.bra",TXT)
+& rmv$(str$(tri ".bak"))
+& ren$("tri.bra".str$(tri ".bak"))
+&   put
+  $ ( "{tri.bra
+𝕌𝕋𝔽-𝟠
+
+Collect trigrams from lemmas
+
+Usage
+-----
+* Edit the line specifying the input (input=yourinput). Remember to escape backslashes. You can use forward slashes instead.
+* Start Bracmat
+* after the prompt, type get$\"tri.bra\"
+* Output is named <your input's name>\".trigramFrequenciesSorted\"
+* CSTlemma can use the output to disambiguate between lemma candidates (-T option). This does not always give better results overall. It works well for Middle Low German. 
+
+Input
+-----
+First column: full forms (not used)
+Second column: lemmas
+(Optionally more columns, which will not be used)
+
+Empty lines are allowed
+
+Example:
+
+bekluendern	beklundern
+beklundern	beklundern
+
+behalp	behelpen
+behelffen	behelpen
+behelpe	behelpen
+
+beholtnisse	beholtnisse
+beholtnysse	beholtnisse
+
+behodersche	behodersche
+}
+
+"
+    , "tri.bra"
+    , NEW
+    , BIN
+    )
+& lst'(X,"tri.bra",APP)
+& put'(\n,"tri.bra",APP,BIN)
+& lst'(r,"tri.bra",APP)
+& put$(str$("\nnew'" X ";\n"),"tri.bra",APP,BIN)
+& done;
+
+new'X;
